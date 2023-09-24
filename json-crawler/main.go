@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -20,39 +21,110 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var bootnode string
+var (
+	jsonpath, writefile string
+)
 
 func init() {
-	flag.StringVar(&bootnode, "targetnode", "", "Target node to connect to. in enode:// format.")
+	flag.StringVar(&jsonpath, "jsonpath", "node-list.json", "Path to json file containing bootnodes. Defauklt is ./node-list.json")
+	flag.StringVar(&writefile, "writefile", "finalized-node-list.json", "Path to write json file containing nodes with added neighbors. Default is ./finalized-node-list.json")
 	flag.Parse()
 }
 
+// a list of nodeleaf structs.
+type nodetree map[string]nodeleaf
+
+// json struct that contains an enode struct and a list of that enodes neighbors.
+type nodeleaf struct {
+	Enode     enode.Node    `json:"enode"`
+	Neighbors []*enode.Node `json:"neighbors"`
+}
+
+// JSON struct representing an ENR record
+type enrJSON struct {
+	Seq           uint64 `json:"seq"`
+	Record        string `json:"record"`
+	Score         int    `json:"score"`
+	FirstResponse string `json:"firstResponse"`
+	LastResponse  string `json:"lastResponse"`
+	LastCheck     string `json:"lastCheck"`
+}
+
 func main() {
-
-	// marshal node into usable enode struct.
-	TargetNode, err := enode.Parse(enode.ValidSchemes, bootnode)
-	if err != nil {
-		log.Fatalf("Failed to parse bootnode: %s", err.Error())
+	// Check if the jsonpath and writefile are empty.
+	// If they are empty, exit with a fatal error.
+	if jsonpath == "" {
+		log.Fatalf("jsonpath is empty")
 	}
-	// start ephemeral discovery node.
-	disc, _ := startV4("", bootnode, "", "")
-	defer disc.Close()
+	if writefile == "" {
+		log.Fatalf("writepath is empty")
+	}
+	// Create a target list of enode nodes to traverse.
+	var target []*enode.Node
 
-	neighbors := disc.LookupPubkey(TargetNode.Pubkey())
-	for _, neighbor := range neighbors {
-		fmt.Println(neighbor.String())
+	// Create a nodetree to store the nodes and their neighbors.
+	var nt nodetree
+
+	// Open the JSON file containing the bootnodes.
+	file, err := os.Open(jsonpath)
+	if err != nil {
+		log.Fatalf("Failed to open JSON file: %s", err.Error())
+	}
+
+	// Decode the JSON file into a list of ENR records.'
+	var entries map[string]enrJSON               // map of string to enrJSON struct for each entry
+	err = json.NewDecoder(file).Decode(&entries) // decode the JSON file into the entries map
+	if err != nil {
+		log.Fatalf("Failed to decode JSON file: %s", err.Error())
+	}
+
+	// populate target with the enode nodes from the JSON file.
+	for _, entry := range entries {
+		// Parse the ENR record from the JSON file.
+		node, err := enode.Parse(enode.ValidSchemes) // I'm not sure how to parse the enrJSON struct into an enode.Node struct.
+		if err != nil {
+			log.Fatalf("Failed to parse ENR record: %s", err.Error())
+		}
+		// Append the node to the target list.
+		target = append(target, node)
+	}
+	// This is going to be very slow. Ideally, we should use parallelism to speed this up. But for now, this will do.
+	// i'm tired and i want to go to bed.
+	for _, node := range target {
+		disc, _, err := startV4("", node.ID().String(), "", "")
+		if err != nil {
+			log.Fatalf("Failed to start ephemeral discovery node: %s", err.Error())
+		}
+		defer disc.Close()
+		// Check if the node is nil before accessing its ID
+		if node != nil {
+			// Lookup the neighbors for the current node.
+			neighbors := disc.LookupPubkey(node.Pubkey())
+			// Create a new nodeleaf struct with the current node and its neighbors.
+			nt[node.ID().String()] = nodeleaf{Enode: *node, Neighbors: neighbors}
+		} else {
+			fmt.Println("Node is nil")
+		}
+	}
+
+	// Marshal the nodeleaf list to JSON.
+	json, err := json.MarshalIndent(nt, "", "  ")
+	// write json to file.
+	err = os.WriteFile(writefile, json, 0644)
+	if err != nil {
+		log.Fatalf("Failed to write json to file: %s", err.Error())
 	}
 }
 
 // startV4 starts an ephemeral discovery V4 node.
-func startV4(nodekey, bootnodes, nodedb, extaddr string) (*discover.UDPv4, discover.Config) {
+func startV4(nodekey, bootnodes, nodedb, extaddr string) (*discover.UDPv4, discover.Config, error) {
 	ln, config := makeDiscoveryConfig(nodekey, bootnodes, nodedb)
 	socket := listen(ln, extaddr)
 	disc, err := discover.ListenV4(socket, ln, config)
 	if err != nil {
-		exit(err)
+		return nil, config, err
 	}
-	return disc, config
+	return disc, config, nil
 }
 
 // makeDiscoveryConfig creates a discovery configuration.
@@ -213,4 +285,8 @@ func decodeRecordBase64(b []byte) ([]byte, bool) {
 	dec := make([]byte, base64.RawURLEncoding.DecodedLen(len(b)))
 	n, err := base64.RawURLEncoding.Decode(dec, b)
 	return dec[:n], err == nil
+}
+
+func (n *nodeleaf) AppendNeighbor(n2 []*enode.Node) {
+	n.Neighbors = append(n.Neighbors, n2...)
 }
