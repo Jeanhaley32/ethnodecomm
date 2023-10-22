@@ -1,4 +1,4 @@
-module neighborfinder
+module github.com/Jeanhaley32/neighborfinder
 
 go 1.21.3
 
