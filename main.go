@@ -1,4 +1,4 @@
-package neighborFinder
+package neighborfinder
 
 import (
 	"bytes"

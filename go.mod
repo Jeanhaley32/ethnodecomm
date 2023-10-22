@@ -1,4 +1,4 @@
-module neighborFinder
+module neighborfinder
 
 go 1.21.3
 
