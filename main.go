@@ -1,10 +1,9 @@
-package main
+package neighborFinder
 
 import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -20,14 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var bootnode string
-
-func init() {
-	flag.StringVar(&bootnode, "targetnode", "", "Target node to connect to. in enode:// format.")
-	flag.Parse()
-}
-
-func main() {
+func Getneighbors(bootnode string) []*enode.Node {
 
 	// marshal node into usable enode struct.
 	TargetNode, err := enode.Parse(enode.ValidSchemes, bootnode)
@@ -39,9 +31,8 @@ func main() {
 	defer disc.Close()
 
 	neighbors := disc.LookupPubkey(TargetNode.Pubkey())
-	for _, neighbor := range neighbors {
-		fmt.Println(neighbor.String())
-	}
+
+	return neighbors
 }
 
 // startV4 starts an ephemeral discovery V4 node.
