@@ -1,6 +1,6 @@
 # Submission for the EthGlobal 2023 Hackathon. 
 
-## EthnodComm
+## EthNodeComm
  Ethnod Communicator is derived from methods created in the [go-ethereum](https://github.com/ethereum/go-ethereum) library
  Mainly those logic from [cmd/devp2p](https://github.com/ethereum/go-ethereum/tree/master/cmd/devp2p)
 
