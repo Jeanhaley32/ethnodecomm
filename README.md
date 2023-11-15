@@ -2,7 +2,7 @@
 
 ## EthnodComm
  Ethnod Communicator is derived from methods created in the [go-ethereum](https://github.com/ethereum/go-ethereum) library
- Mainly those logic from [cmd/devp2p](https://github.com/ethereum/go-ethereum/tree/master/cmd/devp2p)
+ Mainly logic from [cmd/devp2p](https://github.com/ethereum/go-ethereum/tree/master/cmd/devp2p)
 
  It Uses the `lookuppubkey` method with in the [`p2p/discover/v4_udp.go`](https://github.com/ethereum/go-ethereum/blob/master/p2p/discover/v4_udp.go) library To discover the neighbors of TargetNodes.
 
